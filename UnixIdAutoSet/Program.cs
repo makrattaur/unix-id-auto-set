@@ -11,6 +11,7 @@ namespace UnixIdAutoSet
     class Program
     {
         static DateTime kUnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        static string kUnixObjectsGroup = "CN=Unix Objects,OU=Groups";
 
         static void Main(string[] args)
         {
@@ -21,8 +22,21 @@ namespace UnixIdAutoSet
 
                 using (DirectoryEntry ldapConn = new DirectoryEntry())
                 {
-                    UpdateObjects(conn, ldapConn, "(&(objectClass=user)(!uidNumber=*))", "uidNumber", "NextUserId");
-                    UpdateObjects(conn, ldapConn, "(&(objectClass=group)(!gidNumber=*))", "gidNumber", "NextGroupId");
+                    string directorySuffix = (string)ldapConn.Properties["distinguishedName"].Value;
+
+                    string userFilter = string.Format(
+                        "(&(objectClass=user)(memberOf={0},{1})(!uidNumber=*))",
+                        kUnixObjectsGroup,
+                        directorySuffix
+                    );
+                    UpdateObjects(conn, ldapConn, userFilter, "uidNumber", "NextUserId");
+
+                    string groupFilter = string.Format(
+                        "(&(objectClass=group)(memberOf={0},{1})(!gidNumber=*))",
+                        kUnixObjectsGroup,
+                        directorySuffix
+                    );
+                    UpdateObjects(conn, ldapConn, groupFilter, "gidNumber", "NextGroupId");
                 }
 
             }
