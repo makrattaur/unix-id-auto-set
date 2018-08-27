@@ -12,20 +12,20 @@ namespace UnixIdAutoSet
     {
         static DateTime kUnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         static string kUnixObjectsGroup = "CN=Unix Objects,OU=Groups";
+        static string kDefaultUnixUsersGroup = "CN=Unix Users Default Group,OU=Groups";
         static string kUserPrivateGroupContainer = "OU=Unix User Private Groups,OU=Groups";
 
         static void Main(string[] args)
         {
+            string directorySuffix = GetDirectorySuffix();
+
             using (var conn = new SQLiteConnection("Data Source=state.sqlite"))
             {
                 conn.Open();
                 CreateTables(conn);
 
-                string directorySuffix;
                 using (DirectoryEntry ldapConn = new DirectoryEntry())
                 {
-                    directorySuffix = (string)ldapConn.Properties["distinguishedName"].Value;
-
                     string userFilter = string.Format(
                         "(&(objectClass=user)(memberOf={0},{1})(!uidNumber=*))",
                         kUnixObjectsGroup,
@@ -44,7 +44,17 @@ namespace UnixIdAutoSet
                 UpdateUserPrivateGroups(conn, directorySuffix);
             }
 
+            SetDefaultUserGid(directorySuffix);
+
             int x = 42;
+        }
+
+        static string GetDirectorySuffix()
+        {
+            using (DirectoryEntry ldapConn = new DirectoryEntry())
+            {
+                return (string)ldapConn.Properties["distinguishedName"].Value;
+            }
         }
 
         static void UpdateObjects(SQLiteConnection sqlConn, DirectoryEntry root, string filter, string ldapAttribute, string nextIdSource)
@@ -70,6 +80,45 @@ namespace UnixIdAutoSet
                     entry.CommitChanges();
 
                     Console.WriteLine("Set id {0} for entry {1} ({2})", id, entry.Guid, dn);
+                }
+            }
+        }
+
+        static void SetDefaultUserGid(string directorySuffix)
+        {
+            string ldapPath = string.Format(
+                "LDAP://{0},{1}",
+                kDefaultUnixUsersGroup,
+                directorySuffix
+            );
+
+            DirectoryEntry defaultGroupEntry = new DirectoryEntry(ldapPath);
+            int gid = (int)defaultGroupEntry.Properties["gidNumber"].Value;
+
+            using (DirectoryEntry root = new DirectoryEntry())
+            using (DirectorySearcher search = new DirectorySearcher(root))
+            {
+                string filter = string.Format(
+                    "(&(objectClass=user)(memberOf={0},{1})(uidNumber=*)(!gidNumber=*))",
+                    kDefaultUnixUsersGroup,
+                    directorySuffix
+                );
+                search.Filter = filter;
+
+                SearchResultCollection results = search.FindAll();
+                int c = results.Count;
+
+                foreach (SearchResult result in results)
+                {
+                    DirectoryEntry entry = result.GetDirectoryEntry();
+                    string dn = (string)entry.Properties["distinguishedName"].Value;
+
+                    Console.WriteLine("Setting default gid for user {0} ({1})", dn, entry.Guid);
+
+                    entry.Properties["gidNumber"].Value = gid;
+                    entry.CommitChanges();
+
+                    Console.WriteLine("Set default gid for user {0} ({1})", dn, entry.Guid);
                 }
             }
         }
