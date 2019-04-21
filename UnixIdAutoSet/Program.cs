@@ -15,8 +15,15 @@ namespace UnixIdAutoSet
         static string kDefaultUnixUsersGroup = "CN=Unix Users Default Group,OU=Groups";
         static string kUserPrivateGroupContainer = "OU=Unix User Private Groups,OU=Groups";
 
+        static bool commitChanges = true;
+
         static void Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "dryrun")
+            {
+                commitChanges = false;
+            }
+
             string directorySuffix = GetDirectorySuffix();
 
             using (var conn = new SQLiteConnection("Data Source=state.sqlite"))
@@ -74,12 +81,21 @@ namespace UnixIdAutoSet
                     int id = GetId(sqlConn, entry, nextIdSource);
 
                     string dn = (string)entry.Properties["distinguishedName"].Value;
-                    Console.WriteLine("Setting id {0} for entry {1} ({2})", id, entry.Guid, dn);
+                    Console.WriteLine(
+                        "{3} id {0} for entry {1} ({2})",
+                        id,
+                        entry.Guid,
+                        dn,
+                        commitChanges ? "Setting" : "Would have set"
+                    );
 
-                    entry.Properties[ldapAttribute].Value = id;
-                    entry.CommitChanges();
+                    if (commitChanges)
+                    {
+                        entry.Properties[ldapAttribute].Value = id;
+                        entry.CommitChanges();
 
-                    Console.WriteLine("Set id {0} for entry {1} ({2})", id, entry.Guid, dn);
+                        Console.WriteLine("Set id {0} for entry {1} ({2})", id, entry.Guid, dn);
+                    }
                 }
             }
         }
@@ -113,12 +129,20 @@ namespace UnixIdAutoSet
                     DirectoryEntry entry = result.GetDirectoryEntry();
                     string dn = (string)entry.Properties["distinguishedName"].Value;
 
-                    Console.WriteLine("Setting default gid for user {0} ({1})", dn, entry.Guid);
+                    Console.WriteLine(
+                        "{2} default gid for user {0} ({1})",
+                        dn,
+                        entry.Guid,
+                        commitChanges ? "Setting" : "Would have set"
+                    );
 
-                    entry.Properties["gidNumber"].Value = gid;
-                    entry.CommitChanges();
+                    if (commitChanges)
+                    {
+                        entry.Properties["gidNumber"].Value = gid;
+                        entry.CommitChanges();
 
-                    Console.WriteLine("Set default gid for user {0} ({1})", dn, entry.Guid);
+                        Console.WriteLine("Set default gid for user {0} ({1})", dn, entry.Guid);
+                    }
                 }
             }
         }
