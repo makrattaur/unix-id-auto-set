@@ -116,7 +116,7 @@ namespace UnixIdAutoSet
             {
                 string filter = string.Format(
                     "(&(objectClass=user)(memberOf={0},{1})(uidNumber=*)(!gidNumber=*))",
-                    kDefaultUnixUsersGroup,
+                    kUnixObjectsGroup,
                     directorySuffix
                 );
                 search.Filter = filter;
